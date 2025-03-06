@@ -34,7 +34,7 @@ jobs:
            jq -r '.runs[].results[] | "Rule: \(.ruleId) - Severity: \(.level) - Message: \(.message.text)"' snyk.sarif > snyk_report.txt || true
 
       - name: Upload Snyk scan report as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: snyk-security-report
           path: snyk-report.txt

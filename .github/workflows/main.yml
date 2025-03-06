@@ -14,6 +14,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Run Snyk Code Scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: test --all-projects --severity-threshold=high --json-file-output=snyk-code-report.json
+
+      - name: Convert Snyk JSON report to text
+        run: |
+          jq -r '.vulnerabilities[] | "\(.id): \(.title) - Severity: \(.severity)"' snyk-code-report.json > snyk-code-report.txt || echo "No vulnerabilities found" > snyk-code-report.txt
+
+      - name: Upload Snyk Code Scan report as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: snyk-code-security-report
+          path: snyk-code-report.txt
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -21,24 +38,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2 
 
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/docker@master
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        with:
-          image: "${{ steps.login-ecr.outputs.registry }}/flask-backend:latest"
-          args: --file=Dockerfile --severity-threshold=high --json-file-output=snyk-report.json
-
-      - name: Convert Snyk JSON report to text
-        run: |
-           jq -r '.runs[].results[] | "Rule: \(.ruleId) - Severity: \(.level) - Message: \(.message.text)"' snyk.sarif > snyk_report.txt || true
-
-      - name: Upload Snyk scan report as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: snyk-security-report
-          path: snyk-report.txt
-          
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
@@ -47,12 +46,12 @@ jobs:
         env:
           ECR_REPOSITORY: flask-backend
           IMAGE_TAG: latest
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
       - name: Update ECS Service
         run: |
           aws ecs update-service --cluster applicationclusters --service backend-servies --force-new-deployment --desired-count 1 --task-definition backend-td:2
-          

@@ -26,7 +26,7 @@ jobs:
           jq -r '.vulnerabilities[] | "\(.id): \(.title) - Severity: \(.severity)"' snyk-code-report.json > snyk-code-report.txt || echo "No vulnerabilities found" > snyk-code-report.txt
 
       - name: Upload Snyk Code Scan report as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: snyk-code-security-report
           path: snyk-code-report.txt

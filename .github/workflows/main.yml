@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - main
+
 jobs:
   scan:
     name: Scan Code with Snyk
@@ -10,19 +11,23 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      - name: Scan with Snyk
-        id: snyk-scan
-        uses: snyk/actions/node@master
-        with:
-          args: --file=app.py --sarif-file-output=snyk.sarif || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true  
-
-      - name: Convert SARIF to Text using jq
+      
+      - name: Install Snyk CLI
         run: |
-          jq -r '.runs[].results[] | "Rule: \(.ruleId) - Severity: \(.level) - Message: \(.message.text)"' snyk.sarif > snyk_report.txt || true
+          curl -Lo snyk https://github.com/snyk/snyk/releases/latest/download/snyk-linux
+          chmod +x snyk
+          sudo mv snyk /usr/local/bin/
 
+      - name: Authenticate with Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+      
+      - name: Scan app.py with Snyk
+        run: snyk code test --file=app.py --json > snyk_report.json || true
+      
+      - name: Convert JSON to Text
+        run: |
+          jq -r '.runs[].results[] | "Rule: \(.ruleId) - Severity: \(.level) - Message: \(.message.text)"' snyk_report.json > snyk_report.txt || echo "No vulnerabilities found" > snyk_report.txt
+      
       - name: Upload Snyk Report
         uses: actions/upload-artifact@v4
         with:

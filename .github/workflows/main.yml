@@ -70,13 +70,18 @@ jobs:
       - name: Install Trivy
         run: |
           sudo apt-get update && sudo apt-get install -y wget curl jq
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
-      
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
+          sudo mv ./bin/trivy /usr/local/bin/trivy
+          sudo chmod +x /usr/local/bin/trivy
+          echo "Trivy installation completed."
+          trivy --version  # Verify installation
+
       - name: Scan Image with Trivy
         env:
           ECR_REPOSITORY: flask-backend
           IMAGE_TAG: latest
         run: |
+          echo "Scanning image with Trivy..."
           trivy image --exit-code 0 --severity HIGH,CRITICAL ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG > trivy_report.txt
           cat trivy_report.txt
       
@@ -85,6 +90,7 @@ jobs:
         with:
           name: trivy-report
           path: trivy_report.txt
+
 
   deploy:
     name: Deploy to ECS

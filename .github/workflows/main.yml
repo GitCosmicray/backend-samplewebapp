@@ -69,10 +69,8 @@ jobs:
     steps:
       - name: Install Trivy
         run: |
-          sudo apt-get install -y wget
-          wget -qO- https://api.github.com/repos/aquasecurity/trivy/releases/latest | jq -r '.assets[] | select(.name | test("Linux-64bit.tar.gz")) | .browser_download_url' | xargs wget -O trivy.tar.gz
-          tar zxvf trivy.tar.gz
-          sudo mv trivy /usr/local/bin/
+          sudo apt-get update && sudo apt-get install -y wget curl
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
       
       - name: Scan Image with Trivy
         env:

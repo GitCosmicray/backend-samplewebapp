@@ -77,23 +77,14 @@ jobs:
           ECR_REPOSITORY: flask-backend
           IMAGE_TAG: latest
         run: |
-          trivy image --format json --output trivy_report.json ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG || true
-      
-      - name: Convert JSON to Text
-        run: |
-          if jq -e '.Results[].Vulnerabilities' trivy_report.json > /dev/null; then
-            jq -r '.Results[].Vulnerabilities[] | "ID: \(.VulnerabilityID) - Severity: \(.Severity) - Package: \(.PkgName) - Description: \(.Description)"' trivy_report.json > trivy_report.txt
-          else
-            echo "No vulnerabilities found, but full report available in JSON format." > trivy_report.txt
-          fi
+          trivy image --exit-code 0 --severity HIGH,CRITICAL ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG > trivy_report.txt
+          cat trivy_report.txt
       
       - name: Upload Trivy Reports
         uses: actions/upload-artifact@v4
         with:
           name: trivy-report
-          path: |
-            trivy_report.txt
-            trivy_report.json
+          path: trivy_report.txt
 
   deploy:
     name: Deploy to ECS

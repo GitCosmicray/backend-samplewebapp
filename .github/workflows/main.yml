@@ -70,8 +70,8 @@ jobs:
       - name: Install Trivy
         run: |
           sudo apt-get install -y wget
-          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.38.3_Linux-64bit.tar.gz
-          tar zxvf trivy_0.38.3_Linux-64bit.tar.gz
+          wget -qO- https://api.github.com/repos/aquasecurity/trivy/releases/latest | jq -r '.assets[] | select(.name | test("Linux-64bit.tar.gz")) | .browser_download_url' | xargs wget -O trivy.tar.gz
+          tar zxvf trivy.tar.gz
           sudo mv trivy /usr/local/bin/
       
       - name: Scan Image with Trivy

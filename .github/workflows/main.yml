@@ -62,10 +62,39 @@ jobs:
           docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
           docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
 
+  image-scan:
+    name: Scan Image with Trivy
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Install Trivy
+        run: |
+          sudo apt-get install -y wget
+          wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.38.3_Linux-64bit.tar.gz
+          tar zxvf trivy_0.38.3_Linux-64bit.tar.gz
+          sudo mv trivy /usr/local/bin/
+      
+      - name: Scan Image with Trivy
+        env:
+          ECR_REPOSITORY: flask-backend
+          IMAGE_TAG: latest
+        run: |
+          trivy image --format json ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG > trivy_report.json || true
+      
+      - name: Convert JSON to Text
+        run: |
+          jq -r '.Results[].Vulnerabilities[] | "ID: \(.VulnerabilityID) - Severity: \(.Severity) - Package: \(.PkgName) - Description: \(.Description)"' trivy_report.json > trivy_report.txt || echo "No vulnerabilities found" > trivy_report.txt
+      
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy_report.txt
+
   deploy:
     name: Deploy to ECS
     runs-on: ubuntu-latest
-    needs: build
+    needs: image-scan
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2

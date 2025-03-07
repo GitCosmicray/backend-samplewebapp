@@ -61,38 +61,39 @@ jobs:
           docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REPOSITORY:$IMAGE_TAG ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
           docker push ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG
-          echo "ECR_IMAGE=${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_ENV
 
   image-scan:
     name: Scan Image with Trivy
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
       - name: Install Trivy
         run: |
-          sudo apt-get update
-          sudo apt-get install wget apt-transport-https gnupg lsb-release -y
-          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-          echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-          sudo apt-get update
-          sudo apt-get install trivy -y
-
+          sudo apt-get update && sudo apt-get install -y wget curl jq
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh
+      
       - name: Scan Image with Trivy
+        env:
+          ECR_REPOSITORY: flask-backend
+          IMAGE_TAG: latest
         run: |
-          trivy image --format template --template "@/contrib/sarif.tpl" -o trivy-report.sarif $ECR_IMAGE || true
-
-      - name: Convert SARIF to Text
+          trivy image --format json --output trivy_report.json ${{ steps.login-ecr.outputs.registry }}/$ECR_REPOSITORY:$IMAGE_TAG || true
+      
+      - name: Convert JSON to Text
         run: |
-          jq -r '.runs[].results[] | "Severity: \(.level) - Rule: \(.ruleId) - Message: \(.message.text) - Location: \(.locations[0].physicalLocation.artifactLocation.uri):\(.locations[0].physicalLocation.region.startLine)"' trivy-report.sarif > trivy-report.txt || echo "No vulnerabilities found" > trivy-report.txt
-
-      - name: Upload Trivy Report
+          if jq -e '.Results[].Vulnerabilities' trivy_report.json > /dev/null; then
+            jq -r '.Results[].Vulnerabilities[] | "ID: \(.VulnerabilityID) - Severity: \(.Severity) - Package: \(.PkgName) - Description: \(.Description)"' trivy_report.json > trivy_report.txt
+          else
+            echo "No vulnerabilities found, but full report available in JSON format." > trivy_report.txt
+          fi
+      
+      - name: Upload Trivy Reports
         uses: actions/upload-artifact@v4
         with:
           name: trivy-report
-          path: trivy-report.txt
+          path: |
+            trivy_report.txt
+            trivy_report.json
 
   deploy:
     name: Deploy to ECS
